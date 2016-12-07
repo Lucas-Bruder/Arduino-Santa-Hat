@@ -9,7 +9,7 @@
 
 #define SERIAL_BAUD_RATE (115200)
 
-#define DEFAULT_BRIGHTNESS (255U)
+#define LED_DEFAULT_BRIGHTNESS (20U)
 
 #define EEPROM_ANIMATION_STATE_ADDR (0)
 #define EEPROM_SPEED_STATE_ADDR     (10)
@@ -44,6 +44,12 @@ enum speed_state_t {
 CRGB leds[LED_STRIP_LENGTH];
 enum animation_state_t animation;
 enum speed_state_t speed_state;
+
+// If red index is even, led_index % 2 = red
+bool even_index_red = true;
+
+uint8_t led_brightness = LED_DEFAULT_BRIGHTNESS;
+bool brightness_increasing = true;
 
 /*
  * Set the current speed state based on the last one loaded
@@ -104,6 +110,7 @@ void setup() {
   Serial.begin(SERIAL_BAUD_RATE);
   Serial.println("Starting santa hat");
   FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, LED_STRIP_LENGTH);
+  FastLED.setBrightness(led_brightness);
 
   // load state and speed from EEPROM
   enum animation_state_t last_animation_state = (enum animation_state_t)EEPROM.read(EEPROM_ANIMATION_STATE_ADDR);
@@ -121,36 +128,77 @@ void setup() {
   EEPROM.write(EEPROM_SPEED_STATE_ADDR, speed_state);
 }
 
-void loop() {
-    switch(animation) {
-        case ANIMATION_CIRCLING:
+void show_animation_circling(void)
+{
+    for (uint8_t led_index = 0; led_index < LED_STRIP_LENGTH; led_index++) {
+        if (even_index_red) {
+            if (led_index % 2 == 0) {
+                leds[led_index] = CRGB::Red;
+            } else {
+                leds[led_index] = CRGB::Green;
+            }
+        } else {
+            if (led_index % 2 == 0) {
+                leds[led_index] = CRGB::Green;
+            } else {
+                leds[led_index] = CRGB::Red;
+            }
+        }
 
-            break;
-        case ANIMATION_FADING:
-
-            break;
-        case ANIMATION_BOUNCING:
-
-            break;
-        case ANIMATION_CIRCLING_AND_FADING:
-
-            break;
     }
+    even_index_red = !even_index_red;
+}
+
+void show_animation_fading(void)
+{
+    uint8_t new_brightness = (brightness_increasing) ? ++led_brightness : --led_brightness;
+    for (uint8_t led_index = 0; led_index < LED_STRIP_LENGTH; led_index++) {
+        if(led_index % 2 == 0) {
+            leds[led_index] = CRGB::Red;
+        } else {
+            leds[led_index] = CRGB::Green;
+        }
+    } 
+
+    Serial.println(new_brightness);
+    FastLED.setBrightness(new_brightness);
+    
+    if (new_brightness == UINT8_MAX || new_brightness == 0) {
+      brightness_increasing = !brightness_increasing;
+    }
+}
+
+void loop() {
+     show_animation_fading();
+//     switch(animation) {
+//        case ANIMATION_CIRCLING:
+////            show_animation_circling();
+//            break;
+//        case ANIMATION_FADING:
+////            show_animation_fading();
+//            break;
+//        case ANIMATION_BOUNCING:
+//
+//            break;
+//        case ANIMATION_CIRCLING_AND_FADING:
+//
+//            break;
+//    }
     
     FastLED.show(); 
   
     switch(speed_state) {
         case SPEED_SLOW:
-  
+            FastLED.delay(500);
             break;
         case SPEED_MEDIUM:
-  
+            FastLED.delay(250);
             break;
         case SPEED_FAST:
-  
+            FastLED.delay(100);
             break;
         default:
-  
+            FastLED.delay(50000);
             break;
     }
 }
