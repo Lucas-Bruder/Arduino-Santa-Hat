@@ -52,6 +52,7 @@ void animate_circling(void);
 struct animation_data_t {
     animation animate;
     uint16_t delay_ms[SPEED_COUNT];
+    uint16_t using_delay_ms;
 
     // Other data that can be passed around
     bool even_index_red;
@@ -61,36 +62,41 @@ struct animation_data_t {
     
 };
 
-static struct animation_data_t animation_data[ANIMATION_COUNT];// = {
-  //[ANIMATION_CIRCLING] = {.animate = animate_circling, .delay_ms = {300,200,100}, .even_index_red = true, .led_brightness = LED_DEFAULT_BRIGHTNESS},
-//  [ANIMATION_FADING] = {0},
-//  [ANIMATION_BOUNCING] = {0},
-//  [ANIMATION_CIRCLING_AND_FADING] = {0},
-//};
+static struct animation_data_t animation_data[ANIMATION_COUNT];
 
 CRGB leds[LED_STRIP_LENGTH];
-const int8_t LED_BRIGHTNESS_JUMP = 10;
-uint8_t led_brightness = LED_DEFAULT_BRIGHTNESS;
-bool brightness_increasing = true;
+struct animation_data_t curr_animation;
+
+void init_animation_data(void) {
+  // ANIMATION_CIRCLING 
+  animation_data[ANIMATION_CIRCLING].animate = animate_circling;
+  animation_data[ANIMATION_CIRCLING].delay_ms[SPEED_SLOW] = 300;
+  animation_data[ANIMATION_CIRCLING].delay_ms[SPEED_MEDIUM] = 200;
+  animation_data[ANIMATION_CIRCLING].delay_ms[SPEED_FAST] = 100;
+  animation_data[ANIMATION_CIRCLING].even_index_red = true;
+  animation_data[ANIMATION_CIRCLING].led_brightness = LED_DEFAULT_BRIGHTNESS;
+  // \\ ANIMATION_CIRCLING 
+}
 
 void animate_circling(void)
 {
     for (uint8_t led_index = 0; led_index < LED_STRIP_LENGTH; led_index++) {
-//        if (even_index_red) {
-//            if (led_index % 2 == 0) {
-//                leds[led_index] = CRGB::Red;
-//            } else {
-//                leds[led_index] = CRGB::Green;
-//            }
-//        } else {
-//            if (led_index % 2 == 0) {
-//                leds[led_index] = CRGB::Green;
-//            } else {
-//                leds[led_index] = CRGB::Red;
-//            }
-//        }
-
+        if (curr_animation.even_index_red) {
+            if (led_index % 2 == 0) {
+                leds[led_index] = CRGB::Red;
+            } else {
+                leds[led_index] = CRGB::Green;
+            }
+        } else {
+            if (led_index % 2 == 0) {
+                leds[led_index] = CRGB::Green;
+            } else {
+                leds[led_index] = CRGB::Red;
+            }
+        }
+    
     }
+    curr_animation.even_index_red = !curr_animation.even_index_red;
 }
 
 /*
@@ -150,10 +156,10 @@ enum animation_states_t new_animation_state(enum animation_states_t last_animati
 
 
 void setup() {
+  init_animation_data();
   Serial.begin(SERIAL_BAUD_RATE);
   Serial.println("Starting santa hat");
   FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, LED_STRIP_LENGTH);
-  FastLED.setBrightness(led_brightness);
 
   // load state and speed from EEPROM
   enum animation_states_t last_animation_state = (enum animation_states_t)EEPROM.read(EEPROM_ANIMATION_STATE_ADDR);
@@ -173,8 +179,14 @@ void setup() {
 
   Serial.println(new_animation);
   Serial.println(speed_state);
+
+  curr_animation = animation_data[new_animation];
+  curr_animation.using_delay_ms = curr_animation.delay_ms[speed_state];
 }
 
 void loop() {
-
+  if(curr_animation.animate != NULL) {
+    curr_animation.animate();
+    FastLED.delay(curr_animation.using_delay_ms);
+  }
 }
