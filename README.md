@@ -1,3 +1,3 @@
-# Arduino Powered Christmas Hat
+# Arduino Powered Santa Hat
 
 
