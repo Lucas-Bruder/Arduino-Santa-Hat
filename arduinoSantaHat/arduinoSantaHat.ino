@@ -94,7 +94,7 @@ enum animation_state_t new_animation_state(enum animation_state_t last_animation
             break;
         default:
             while(1) {
-                Serial.println("== Error setting animation");
+                Serial.println("== Error setting animation ==");
             }
     }
     return new_animation_state;
@@ -117,21 +117,40 @@ void setup() {
       animation = last_animation_state;
   }
   
-  // Set animation and speed
   EEPROM.write(EEPROM_ANIMATION_STATE_ADDR, animation);
   EEPROM.write(EEPROM_SPEED_STATE_ADDR, speed_state);
-
-  Serial.println(animation);
-  Serial.println(speed_state);
 }
 
 void loop() {
-  for (uint8_t led_index = 0; led_index < LED_STRIP_LENGTH; led_index++) {
-      if (led_index % 2 == 0) {
-        leds[led_index] = CRGB::Green; 
-      } else {
-        leds[led_index] = CRGB::Red; 
-      }
-  }
-  FastLED.show(); 
+    switch(animation) {
+        case ANIMATION_CIRCLING:
+
+            break;
+        case ANIMATION_FADING:
+
+            break;
+        case ANIMATION_BOUNCING:
+
+            break;
+        case ANIMATION_CIRCLING_AND_FADING:
+
+            break;
+    }
+    
+    FastLED.show(); 
+  
+    switch(speed_state) {
+        case SPEED_SLOW:
+  
+            break;
+        case SPEED_MEDIUM:
+  
+            break;
+        case SPEED_FAST:
+  
+            break;
+        default:
+  
+            break;
+    }
 }
