@@ -9,7 +9,7 @@
 
 #define SERIAL_BAUD_RATE (115200)
 
-#define LED_DEFAULT_BRIGHTNESS (187)
+#define LED_DEFAULT_BRIGHTNESS (200)
 
 #define EEPROM_ANIMATION_STATE_ADDR (0)
 #define EEPROM_SPEED_STATE_ADDR     (10)
@@ -17,17 +17,13 @@
 #define LED_PIN 12
 #define LED_STRIP_LENGTH 18
 
-/*
- * Different animations the santa hat will show
- */
 enum animation_states_t {
   // Red and green lights constantly circle around the hat
   ANIMATION_CIRCLING = 0,
   // Red and green lights stay stationary, fade in and out
   ANIMATION_FADING,
-  // Red bounces around the hat and once it reaches the beginning
-  // green starts again
-  ANIMATION_BOUNCING,
+  // Alternate green and red fading
+  ANIMATION_RAINBOW,
   // Circling the hat and fading in and out
   ANIMATION_CIRCLING_AND_FADING,
 
@@ -48,6 +44,8 @@ enum speed_state_t {
 typedef void (*animation)(void);
 
 void animate_circling(void);
+void animate_fading(void);
+void animate_alternate_fading(void);
 
 struct animation_data_t {
     animation animate;
@@ -59,23 +57,52 @@ struct animation_data_t {
     bool brightness_increasing;
     uint8_t led_brightness;
     uint8_t brightness_jump;
-    
+    uint8_t minimum_brighness;
 };
 
 static struct animation_data_t animation_data[ANIMATION_COUNT];
 
-CRGB leds[LED_STRIP_LENGTH];
+CRGBArray<LED_STRIP_LENGTH> leds;
 struct animation_data_t curr_animation;
 
 void init_animation_data(void) {
   // ANIMATION_CIRCLING 
   animation_data[ANIMATION_CIRCLING].animate = animate_circling;
-  animation_data[ANIMATION_CIRCLING].delay_ms[SPEED_SLOW] = 300;
-  animation_data[ANIMATION_CIRCLING].delay_ms[SPEED_MEDIUM] = 200;
+  animation_data[ANIMATION_CIRCLING].delay_ms[SPEED_SLOW] = 400;
+  animation_data[ANIMATION_CIRCLING].delay_ms[SPEED_MEDIUM] = 250;
   animation_data[ANIMATION_CIRCLING].delay_ms[SPEED_FAST] = 100;
   animation_data[ANIMATION_CIRCLING].even_index_red = true;
   animation_data[ANIMATION_CIRCLING].led_brightness = LED_DEFAULT_BRIGHTNESS;
-  // \\ ANIMATION_CIRCLING 
+
+  // ANIMATION_FADING
+  animation_data[ANIMATION_FADING].animate = animate_fading;
+  animation_data[ANIMATION_FADING].delay_ms[SPEED_SLOW] = 200;
+  animation_data[ANIMATION_FADING].delay_ms[SPEED_MEDIUM] = 100;
+  animation_data[ANIMATION_FADING].delay_ms[SPEED_FAST] = 30;
+  animation_data[ANIMATION_FADING].even_index_red = true;
+  animation_data[ANIMATION_FADING].led_brightness = LED_DEFAULT_BRIGHTNESS;
+  animation_data[ANIMATION_FADING].brightness_jump = 10;
+  animation_data[ANIMATION_FADING].minimum_brighness = 20;
+
+  // ANIMATION_RAINBOW
+  animation_data[ANIMATION_RAINBOW].animate = animate_rainbow;
+  animation_data[ANIMATION_RAINBOW].delay_ms[SPEED_SLOW] = 200;
+  animation_data[ANIMATION_RAINBOW].delay_ms[SPEED_MEDIUM] = 100;
+  animation_data[ANIMATION_RAINBOW].delay_ms[SPEED_FAST] = 30;
+  animation_data[ANIMATION_RAINBOW].even_index_red = true;
+  animation_data[ANIMATION_RAINBOW].led_brightness = LED_DEFAULT_BRIGHTNESS;
+  animation_data[ANIMATION_RAINBOW].brightness_jump = 10;
+  animation_data[ANIMATION_RAINBOW].minimum_brighness = 40;
+
+  //  ANIMATION_CIRCLING_AND_FADING
+  animation_data[ANIMATION_CIRCLING_AND_FADING].animate = animate_circling_and_fading;
+  animation_data[ANIMATION_CIRCLING_AND_FADING].delay_ms[SPEED_SLOW] = 200;
+  animation_data[ANIMATION_CIRCLING_AND_FADING].delay_ms[SPEED_MEDIUM] = 200;
+  animation_data[ANIMATION_CIRCLING_AND_FADING].delay_ms[SPEED_FAST] = 100;
+  animation_data[ANIMATION_CIRCLING_AND_FADING].even_index_red = true;
+  animation_data[ANIMATION_CIRCLING_AND_FADING].led_brightness = LED_DEFAULT_BRIGHTNESS;
+  animation_data[ANIMATION_CIRCLING_AND_FADING].brightness_jump = 30;
+  animation_data[ANIMATION_CIRCLING_AND_FADING].minimum_brighness = 20;
 }
 
 void animate_circling(void)
@@ -97,6 +124,81 @@ void animate_circling(void)
     
     }
     curr_animation.even_index_red = !curr_animation.even_index_red;
+}
+
+void animate_fading(void)
+{
+    int16_t new_brightness = curr_animation.led_brightness;
+    if (curr_animation.brightness_increasing) {
+        new_brightness += curr_animation.brightness_jump;
+        if (new_brightness > UINT8_MAX) {
+            new_brightness = UINT8_MAX;
+            curr_animation.brightness_increasing = false;
+        }
+    } else {
+       new_brightness -= curr_animation.brightness_jump;
+       if (new_brightness < curr_animation.minimum_brighness) {
+          new_brightness = curr_animation.minimum_brighness;
+          curr_animation.brightness_increasing = true;
+       }
+    }
+    for (uint8_t led_index = 0; led_index < LED_STRIP_LENGTH; led_index++) {
+        if(led_index % 2 == 0) {
+            leds[led_index] = CRGB::Red;
+        } else {
+            leds[led_index] = CRGB::Green;
+        }
+    }
+    
+    FastLED.setBrightness(new_brightness);
+    
+    curr_animation.led_brightness = new_brightness;
+}
+
+void animate_rainbow(void)
+{
+    // Repurposed led_brightness variable
+    leds.fill_rainbow(curr_animation.led_brightness);
+    curr_animation.led_brightness += curr_animation.brightness_jump;
+}
+
+void animate_circling_and_fading(void)
+{
+    int16_t new_brightness = curr_animation.led_brightness;
+    if (curr_animation.brightness_increasing) {
+        new_brightness += curr_animation.brightness_jump;
+        if (new_brightness > UINT8_MAX) {
+            new_brightness = UINT8_MAX;
+            curr_animation.brightness_increasing = false;
+        }
+    } else {
+       new_brightness -= curr_animation.brightness_jump;
+       if (new_brightness < curr_animation.minimum_brighness) {
+          new_brightness = curr_animation.minimum_brighness;
+          curr_animation.brightness_increasing = true;
+       }
+    }
+    for (uint8_t led_index = 0; led_index < LED_STRIP_LENGTH; led_index++) {
+        if (curr_animation.even_index_red) {
+            if (led_index % 2 == 0) {
+                leds[led_index] = CRGB::Red;
+            } else {
+                leds[led_index] = CRGB::Green;
+            }
+        } else {
+            if (led_index % 2 == 0) {
+                leds[led_index] = CRGB::Green;
+            } else {
+                leds[led_index] = CRGB::Red;
+            }
+        }
+    
+    }
+    curr_animation.even_index_red = !curr_animation.even_index_red;
+    
+    FastLED.setBrightness(new_brightness);
+    
+    curr_animation.led_brightness = new_brightness;
 }
 
 /*
@@ -138,9 +240,9 @@ enum animation_states_t new_animation_state(enum animation_states_t last_animati
             new_animation_state = ANIMATION_FADING;
             break;
         case ANIMATION_FADING:
-            new_animation_state = ANIMATION_BOUNCING;
+            new_animation_state = ANIMATION_RAINBOW;
             break;
-        case ANIMATION_BOUNCING:
+        case ANIMATION_RAINBOW:
             new_animation_state = ANIMATION_CIRCLING_AND_FADING;
             break;
         case ANIMATION_CIRCLING_AND_FADING:
@@ -156,37 +258,38 @@ enum animation_states_t new_animation_state(enum animation_states_t last_animati
 
 
 void setup() {
-  init_animation_data();
-  Serial.begin(SERIAL_BAUD_RATE);
-  Serial.println("Starting santa hat");
-  FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, LED_STRIP_LENGTH);
-
-  // load state and speed from EEPROM
-  enum animation_states_t last_animation_state = (enum animation_states_t)EEPROM.read(EEPROM_ANIMATION_STATE_ADDR);
-  enum speed_state_t last_speed_state =  (enum speed_state_t)(EEPROM.read(EEPROM_SPEED_STATE_ADDR));
-
-  enum speed_state_t speed_state = get_speed_state(last_speed_state);
-
-  enum animation_states_t new_animation;
-  if ((last_speed_state == SPEED_FAST) && (speed_state == SPEED_SLOW)) {
-      new_animation = new_animation_state(last_animation_state);
-  } else {
-      new_animation = last_animation_state;
-  }
+    init_animation_data();
+    Serial.begin(SERIAL_BAUD_RATE);
+    FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, LED_STRIP_LENGTH);
   
-  EEPROM.write(EEPROM_ANIMATION_STATE_ADDR, new_animation);
-  EEPROM.write(EEPROM_SPEED_STATE_ADDR, speed_state);
-
-  Serial.println(new_animation);
-  Serial.println(speed_state);
-
-  curr_animation = animation_data[new_animation];
-  curr_animation.using_delay_ms = curr_animation.delay_ms[speed_state];
+    enum animation_states_t last_animation_state = (enum animation_states_t)EEPROM.read(EEPROM_ANIMATION_STATE_ADDR);
+    enum speed_state_t last_speed_state =  (enum speed_state_t)(EEPROM.read(EEPROM_SPEED_STATE_ADDR));
+  
+    enum speed_state_t speed_state = get_speed_state(last_speed_state);
+  
+    enum animation_states_t new_animation;
+    if ((last_speed_state == SPEED_FAST) && (speed_state == SPEED_SLOW)) {
+        new_animation = new_animation_state(last_animation_state);
+    } else {
+        new_animation = last_animation_state;
+    }
+    
+    EEPROM.write(EEPROM_ANIMATION_STATE_ADDR, new_animation);
+    EEPROM.write(EEPROM_SPEED_STATE_ADDR, speed_state);
+  
+    Serial.println(new_animation);
+    Serial.println(speed_state);
+  
+    curr_animation = animation_data[new_animation];
+    curr_animation.using_delay_ms = curr_animation.delay_ms[speed_state];
+    FastLED.setBrightness(curr_animation.led_brightness);
 }
 
 void loop() {
-  if(curr_animation.animate != NULL) {
-    curr_animation.animate();
-    FastLED.delay(curr_animation.using_delay_ms);
-  }
+    if(curr_animation.animate != NULL) {
+        curr_animation.animate();
+        FastLED.delay(curr_animation.using_delay_ms);
+    } else {
+        Serial.println("== Error setting current animation ==");
+    }
 }
